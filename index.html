@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F6F6F3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+<title>혈당 기록</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#F6F6F3; --card:#FFFFFF; --ink:#1D1D1B; --sub:#8A8A85; --sub2:#55554F; --line:#ECECE8; --field:#F1F1EE;
+  --pri:#1D1D1B; --pri-ink:#FFFFFF;
+  --low:#2F6FDB; --ok:#1E9E5A; --warn:#D9822B; --high:#E0464E;
+  --low-bg:#EAF1FD; --ok-bg:#E6F6EC; --warn-bg:#FCF0E3; --high-bg:#FDECEC;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#121211; --card:#1C1C1A; --ink:#EDEDEA; --sub:#8F8F89; --sub2:#BDBDB7; --line:#2A2A27; --field:#262623;
+    --pri:#EDEDEA; --pri-ink:#121211;
+    --low:#79A6F2; --ok:#4FCB86; --warn:#F0A65A; --high:#F27A80;
+    --low-bg:#1B2738; --ok-bg:#16301F; --warn-bg:#36291A; --high-bg:#3A1D1F;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Pretendard,-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  font-size:20px;line-height:1.5;letter-spacing:-0.01em;-webkit-font-smoothing:antialiased;
+  padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+button{font:inherit;cursor:pointer;color:inherit}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px calc(100px + env(safe-area-inset-bottom,0px))}
+
+.top{padding:16px 4px 12px}
+.top h1{margin:0;font-size:31px;font-weight:700;letter-spacing:-0.03em}
+.top p{margin:2px 0 0;color:var(--sub);font-size:18px}
+
+.card{background:var(--card);border-radius:18px;padding:20px;margin-bottom:12px}
+
+/* 오늘 요약 */
+.sum-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.sum-head b{font-size:19px}
+.sum-head span{font-size:16px;color:var(--sub)}
+.sum-grid{display:grid;grid-template-columns:repeat(3,1fr);text-align:center}
+.sum-grid div+div{border-left:1px solid var(--line)}
+.sum-grid small{display:block;font-size:16px;color:var(--sub)}
+.sum-grid strong{font-size:29px;font-weight:700;font-variant-numeric:tabular-nums}
+.sum-empty{color:var(--sub);font-size:18px;margin:0}
+
+/* 입력 */
+.lb{display:block;font-size:17px;color:var(--sub2);font-weight:600;margin:18px 0 8px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row .lb{margin-top:0}
+input{font:inherit;color:var(--ink);background:var(--field);border:0;border-radius:12px;padding:0 14px;width:100%;height:58px;outline:none;transition:box-shadow .15s}
+input:focus{box-shadow:inset 0 0 0 2px var(--pri)}
+input::placeholder{color:var(--sub)}
+.num{position:relative}
+.num input{height:80px;font-size:36px;font-weight:700;padding:0 8px;text-align:center;font-variant-numeric:tabular-nums}
+.num span{display:block;text-align:center;margin-top:4px;font-size:16px;color:var(--sub);pointer-events:none}
+.hint{font-size:16px;color:var(--sub);margin:8px 2px 0}
+button:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{border:0;background:var(--field);color:var(--sub2);font-size:18px;font-weight:600;height:48px;padding:0 18px;border-radius:99px;transition:background .15s,color .15s}
+.chips button.on{background:var(--pri);color:var(--pri-ink)}
+
+.more{margin-top:18px;border-top:1px solid var(--line)}
+.more summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:16px 2px 2px;cursor:pointer;font-size:18px;color:var(--sub2);font-weight:600}
+.more summary::-webkit-details-marker{display:none}
+.more summary b{font-weight:500;color:var(--sub);font-size:17px;text-align:right}
+.more summary b::after{content:'';display:inline-block;width:7px;height:7px;border-right:2px solid var(--sub);border-bottom:2px solid var(--sub);transform:rotate(45deg);margin:0 2px 3px 10px;transition:transform .2s}
+.more[open] summary b::after{transform:rotate(-135deg);margin-bottom:-1px}
+
+.err{color:var(--high);font-size:17px;font-weight:600;margin-top:14px}
+.err:empty{display:none}
+.btn{width:100%;height:64px;border:0;border-radius:14px;background:var(--pri);color:var(--pri-ink);font-size:20px;font-weight:700;margin-top:20px;transition:transform .1s,opacity .15s}
+.btn:active{transform:scale(.98);opacity:.9}
+.btn.sub{background:var(--field);color:var(--sub2);margin-top:8px}
+
+/* 목록 */
+.day{display:flex;justify-content:space-between;align-items:baseline;margin:28px 4px 10px;font-size:20px;font-weight:700}
+.day span{font-size:17px;color:var(--sub);font-weight:500}
+.list{padding:4px 20px}
+.slot{font-size:16px;font-weight:600;color:var(--sub);padding:14px 0 0}
+.rec{padding:10px 0 16px}
+.rec+.rec{border-top:1px solid var(--line);padding-top:14px}
+.rh{display:flex;align-items:center;gap:8px}
+.time{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.tag{font-size:16px;font-weight:600;color:var(--sub2);background:var(--field);padding:2px 8px;border-radius:6px}
+.tag.none{color:var(--sub)}
+.grow{flex:1}
+.lnk{border:0;background:var(--field);color:var(--sub2);font-size:17px;font-weight:600;padding:0 16px;height:44px;border-radius:10px;margin-left:6px}
+.lnk.sure{background:var(--high);color:#fff;font-weight:700}
+.vals{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.v{background:var(--field);border-radius:12px;padding:10px 14px}
+.vl{display:flex;align-items:center;gap:6px;font-size:16px;color:var(--sub2)}
+.v b{display:block;font-size:29px;font-weight:700;margin-top:1px;font-variant-numeric:tabular-nums}
+.v b small{font-size:16px;font-weight:500;color:var(--sub);margin-left:3px}
+.v.none b{color:var(--sub);font-weight:500}
+.pill{font-size:16px;font-weight:700;padding:1px 6px;border-radius:5px;font-style:normal}
+.low{color:var(--low)}.ok{color:var(--ok)}.warn{color:var(--warn)}.high{color:var(--high)}
+.bg-low{background:var(--low-bg);color:var(--low)}.bg-ok{background:var(--ok-bg);color:var(--ok)}
+.bg-warn{background:var(--warn-bg);color:var(--warn)}.bg-high{background:var(--high-bg);color:var(--high)}
+.meta{margin-top:8px;font-size:17px;color:var(--sub2)}
+.meta em{font-style:normal;color:var(--sub)}
+.empty-list{text-align:center;color:var(--sub);font-size:18px;padding:40px 10px}
+
+.tools{display:flex;gap:8px;margin-top:28px}
+.tools button{flex:1;height:54px;border:0;border-radius:12px;background:var(--card);color:var(--sub2);font-size:17px;font-weight:600}
+.note{font-size:16px;color:var(--sub);text-align:center;margin:14px 8px 0;line-height:1.6}
+
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);opacity:0;
+  background:var(--pri);color:var(--pri-ink);font-size:18px;font-weight:600;padding:12px 20px;border-radius:12px;
+  transition:opacity .2s,transform .2s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* 사진 */
+.hero{margin:0 0 12px;border-radius:18px;overflow:hidden;background:var(--field);cursor:pointer}
+.hero img{display:block;width:100%;aspect-ratio:2/1;object-fit:cover;object-position:center 30%}
+.pop{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:20px;
+  opacity:0;transition:opacity .25s}
+.pop.show{opacity:1}
+.pop[hidden]{display:none}
+.pop-in{width:100%;max-width:480px;text-align:center;transform:scale(.96);transition:transform .25s}
+.pop.show .pop-in{transform:scale(1)}
+.pop img{display:block;width:100%;max-height:68vh;object-fit:contain;border-radius:18px}
+.pop p{color:#fff;font-size:22px;font-weight:700;margin:16px 0 0}
+.pop p:empty{display:none}
+.pop .btn{background:#fff;color:#1D1D1B;margin-top:16px}
+
+:root{--post:#7B5CC4}
+@media (prefers-color-scheme:dark){:root{--post:#A88BEB}}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.fz{border:0;background:var(--card);height:52px;padding:0 16px;border-radius:12px;font-size:18px;font-weight:700;color:var(--sub2);white-space:nowrap}
+.pv{font-size:17px;margin-top:8px;min-height:1.6em;text-align:center}
+.pv .pill{font-size:18px;padding:4px 12px;border-radius:8px}
+.pv .hint{margin:0}
+.sec-h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px}
+.sec-h b{font-size:21px}
+.seg{display:flex;background:var(--field);border-radius:12px;padding:4px;gap:2px}
+.seg button{border:0;background:transparent;color:var(--sub2);font-size:17px;font-weight:600;height:42px;padding:0 14px;border-radius:9px}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+@media (prefers-color-scheme:dark){.seg button.on{background:#3A3A36}}
+.chart svg{display:block;width:100%;height:auto}
+.chart text{font-size:11px;fill:var(--sub);font-family:inherit}
+.lg+.lg{margin-top:6px}
+.lg{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:16px;color:var(--sub2);margin-top:12px}
+.lg i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.pick{margin-top:12px;font-size:19px;font-weight:600;min-height:1.5em}
+.pick:empty::before{content:'점을 누르면 자세히 보여요';color:var(--sub);font-weight:400;font-size:16px}
+.cal-nav{display:flex;gap:6px}
+.cal-nav button{border:0;background:var(--field);width:48px;height:48px;border-radius:12px;font-size:24px;color:var(--sub2)}
+.cal-nav button:disabled{opacity:.3}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal .dw{font-size:16px;color:var(--sub);padding:4px 0}
+.cal .dw:first-child{color:var(--high)}
+.cal button{border:0;background:none;aspect-ratio:1;border-radius:12px;font-size:19px;font-weight:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0;color:var(--ink)}
+.cal button:disabled{color:var(--sub);opacity:.55;cursor:default}
+.cal button.today{box-shadow:inset 0 0 0 2px var(--pri)}
+.cal button i{width:9px;height:9px;border-radius:50%}
+.d-ok{background:var(--ok)}.d-warn{background:var(--warn)}.d-high{background:var(--high)}.d-low{background:var(--low)}.d-rec{background:var(--sub)}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+.pane[hidden]{display:none}
+.pv:empty{display:none}
+.card.sum{padding:14px 20px}
+.sum-line{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:17px;color:var(--sub2)}
+.sum-line b{color:var(--ink);font-size:18px}
+.sum-line strong{font-size:22px;color:var(--ink);font-variant-numeric:tabular-nums}
+.sum-line strong.low{color:var(--low)}
+.sum-line .sub{color:var(--sub)}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;
+  background:var(--card);border-top:1px solid var(--line);padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px))}
+.tabs button{border:0;background:none;height:58px;border-radius:12px;font-size:18px;font-weight:700;color:var(--sub)}
+.tabs button.on{background:var(--field);color:var(--ink)}
+#p-list .day:first-child{margin-top:4px}
+.hero{position:relative}
+.hero figcaption{font-size:17px;color:var(--sub2);background:var(--card);padding:14px 18px;border-radius:18px}
+.hero.has figcaption{position:absolute;left:0;right:0;bottom:0;border-radius:0;background:linear-gradient(transparent,rgba(0,0,0,.62));color:#fff;padding:30px 16px 12px}
+.hero figcaption b{font-size:20px}
+#timings{display:grid;grid-template-columns:1fr 1fr}
+#timings button{height:48px}
+.pick div{margin-top:2px}.pick .sub{color:var(--sub2);font-size:17px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div><h1>혈당 기록</h1><p id="today"></p></div>
+    <button class="fz" id="fz">글씨 보통</button>
+  </header>
+
+  <div class="pane" id="p-rec">
+  <figure class="hero" id="hero"><figcaption id="summary"></figcaption></figure>
+
+
+  <section class="card" id="formCard">
+    <div class="row">
+      <div><label class="lb" for="fp">채혈 (손끝)</label><div class="num"><input id="fp" type="number" inputmode="numeric" min="10" max="900" placeholder="0"><span>mg/dL</span></div><div class="pv" id="fpPv"></div></div>
+      <div><label class="lb" for="cgm">연속혈당기</label><div class="num"><input id="cgm" type="number" inputmode="numeric" min="10" max="900" placeholder="0"><span>mg/dL</span></div><div class="pv" id="cgmPv"></div></div>
+    </div>
+
+    <div class="lb">공복 / 식후</div>
+    <div class="chips" id="timings"></div>
+
+
+    <div class="err" id="err" role="alert"></div>
+    <button class="btn" id="save">저장</button>
+    <button class="btn sub" id="cancel" hidden>수정 취소</button>
+    <details class="more" id="more">
+      <summary>측정 시간<b id="moreSum"></b></summary>
+      <label class="lb" for="dt">측정 시간</label>
+      <input id="dt" type="datetime-local">
+
+      <input id="mt" type="hidden"><input id="memo" type="hidden">
+    </details>
+  </section>
+  </div>
+
+  <section class="card pane" id="p-chart" hidden>
+    <div class="sec-h"><b>그래프</b><div class="seg" id="range"></div></div>
+    <div class="chart" id="chart"></div>
+    <div class="lg"><span><i style="background:var(--pri)"></i>채혈 선</span><span><i style="background:var(--post)"></i>연속혈당기 선</span></div><div class="lg"><span><i style="background:var(--sub2)"></i>공복·식전</span><span><i style="box-shadow:inset 0 0 0 2px var(--sub2)"></i>식후</span><span><i style="background:var(--sub);opacity:.6"></i>구분 없음</span></div>
+    <div class="pick" id="pick"></div>
+  </section>
+
+  <section class="card pane" id="p-cal" hidden>
+    <div class="sec-h"><b id="calTitle"></b><div class="cal-nav"><button id="calPrev" aria-label="이전 달">‹</button><button id="calNext" aria-label="다음 달">›</button></div></div>
+    <div class="cal" id="cal"></div>
+    <div class="lg"><span><i class="d-ok"></i>정상</span><span><i class="d-warn"></i>주의</span><span><i class="d-high"></i>고혈당</span><span><i class="d-low"></i>저혈당</span></div>
+    <p class="hint">날짜를 누르면 그날 기록으로 이동해요</p>
+  </section>
+
+  <div class="pane" id="p-list" hidden>
+  <div id="list"></div>
+
+  <div class="tools">
+    <button id="exp">백업 파일 저장</button>
+    <button id="imp">백업 불러오기</button>
+    <input type="file" id="impFile" accept=".json,application/json" hidden>
+  </div>
+  <p class="note">기록은 이 기기의 브라우저에만 남아요. 휴대폰을 바꾸거나 인터넷 기록을 지우기 전에 백업해 두세요.<br>판정은 참고용이에요. 진단과 치료는 의료진과 상의하세요.</p>
+  </div>
+</div>
+<nav class="tabs" id="tabs"><button data-t="rec" class="on">기록하기</button><button data-t="chart">그래프</button><button data-t="cal">달력</button><button data-t="list">지난 기록</button></nav>
+<div class="toast" id="toast" role="status"></div>
+<div class="pop" id="pop" hidden>
+  <div class="pop-in">
+    <img id="popImg" alt="사진">
+    <p id="popMsg"></p>
+    <button class="btn" id="popClose">확인</button>
+  </div>
+</div>
+
+<script>
+const KEY='glucoseLog.v1';
+const SLOTS=['아침','점심','저녁'];
+const TIMINGS=['공복','식전','식후 1시간','식후 2시간'];
+const $=id=>document.getElementById(id);
+let recs=[],editId=null,slotManual=false,timingManual=false,slot='아침',timing='';
+try{recs=JSON.parse(localStorage.getItem(KEY))||[]}catch(e){recs=[]}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(recs));return localStorage.getItem(KEY)!==null}catch(e){return false}}
+
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+function nowLocal(){const d=new Date();return `${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`}
+// 아침 5~10시, 점심 10~16시, 저녁 16시~다음날 5시
+function slotOf(h){return h>=5&&h<10?'아침':h>=10&&h<16?'점심':'저녁'}
+const DOW=['일','월','화','수','목','금','토'];
+function dayLabel(s){
+  const [y,m,d]=s.split('-').map(Number),base=`${m}월 ${d}일 ${DOW[new Date(y,m-1,d).getDay()]}요일`;
+  const t=new Date(),yd=new Date(t.getFullYear(),t.getMonth(),t.getDate()-1);
+  return s===ymd(t)?`오늘 · ${base}`:s===ymd(yd)?`어제 · ${base}`:base;
+}
+
+// 공복/식후를 고르지 않았으면 판정하지 않음
+function status(v,t){
+  if(v<70)return['low','저혈당'];
+  if(!t)return null;
+  const post=t.startsWith('식후');
+  const warnFrom=post?140:100, highFrom=post?200:126;
+  if(v>=highFrom)return['high','고혈당'];
+  if(v>=warnFrom)return['warn','주의'];
+  return['ok','정상'];
+}
+
+let toastT;
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),1800)}
+
+function chips(el,items,cur,fn){
+  el.innerHTML='';
+  items.forEach(x=>{const b=document.createElement('button');b.type='button';if(x===cur)b.className='on';b.textContent=x;
+    b.setAttribute('aria-pressed',x===cur);b.onclick=()=>fn(x);el.appendChild(b)});
+}
+function drawChips(){
+  chips($('timings'),TIMINGS,timing,x=>{timing=(timing===x?'':x);timingManual=true;drawChips()});
+  const v=$('dt').value;
+  let when='';
+  if(v){when=(v.slice(0,10)===ymd(new Date())?'오늘 ':`${Number(v.slice(5,7))}/${Number(v.slice(8,10))} `)+v.slice(11,16);
+    if(v===nowLocal())when='지금';}
+  preview();
+  $('moreSum').textContent=[when,slot,$('memo').value.trim()?'메모 있음':''].filter(Boolean).join(' · ');
+}
+function autoSlot(){
+  if(slotManual)return;
+  const v=$('dt').value; if(!v)return;
+  slot=slotOf(Number(v.slice(11,13)));
+}
+function autoTiming(){
+  if(timingManual)return;
+  const dt=$('dt').value,mt=$('mt').value; if(!dt||!mt)return;
+  let m=(Number(dt.slice(11,13))*60+Number(dt.slice(14,16)))-(Number(mt.slice(0,2))*60+Number(mt.slice(3,5)));
+  if(m<-720)m+=1440;   // 자정을 넘긴 경우 (예: 23:30 식사, 00:30 측정)
+  else if(m>720)m-=1440;
+  timing=m<0?'식전':m<90?'식후 1시간':'식후 2시간';
+}
+let dtManual=false;
+$('dt').addEventListener('input',()=>{dtManual=true;autoSlot();autoTiming();drawChips()});
+$('mt').addEventListener('input',()=>{autoTiming();drawChips()});
+$('memo').addEventListener('input',drawChips);
+
+function resetForm(){
+  editId=null;dtManual=false;slotManual=false;timingManual=false;timing='';
+  $('fp').value='';$('cgm').value='';$('mt').value='';$('memo').value='';$('err').textContent='';
+  $('dt').value=nowLocal();autoSlot();drawChips();
+  $('more').open=false;
+  $('save').textContent='저장';$('cancel').hidden=true;
+}
+
+let saving=false;
+$('save').onclick=()=>{
+  if(saving)return;
+  const fp=$('fp').value.trim(),cg=$('cgm').value.trim();
+  if(!fp&&!cg){$('err').textContent='채혈이나 연속혈당기 수치를 입력해 주세요';return}
+  const f=fp?Number(fp):null,c=cg?Number(cg):null;
+  if((f!==null&&(f<10||f>900))||(c!==null&&(c<10||c>900))){$('err').textContent='수치는 10에서 900 사이로 입력해 주세요';return}
+  if(!$('dt').value){$('more').open=true;$('err').textContent='측정 시간을 확인해 주세요';return}
+  if(toD($('dt').value)-new Date()>5*60000){$('more').open=true;$('err').textContent='측정 시간이 지금보다 늦어요. 시간을 확인해 주세요';return}
+  saving=true;setTimeout(()=>{saving=false},1200);
+  const wasEdit=!!editId;
+  const r={id:editId||String(Date.now()),ts:$('dt').value,slot:slotOf(Number($('dt').value.slice(11,13))),timing,fp:f,cgm:c,mt:$('mt').value,memo:$('memo').value.trim()};
+  const prev=recs;
+  recs=editId?recs.map(x=>x.id===editId?r:x):[...recs,r];
+  if(!persist()){recs=prev;$('err').textContent='저장되지 않았어요. 앱을 닫았다가 다시 열어 주세요';render();return}
+  resetForm();render();
+  if(wasEdit)toast('수정했어요');else popPhoto('저장했어요');
+};
+$('cancel').onclick=resetForm;
+
+const mainVal=r=>r.fp!==null?r.fp:r.cgm;
+function renderSummary(){
+  const t=ymd(new Date()),list=recs.filter(r=>r.ts.slice(0,10)===t).sort((a,b)=>a.ts.localeCompare(b.ts)),el=$('summary');
+  if(!list.length){el.innerHTML='오늘은 아직 기록이 없어요';return}
+  const show=r=>{const v=mainVal(r),st=status(v,r.timing);return `<b class="${st?st[0]:''}">${v}</b>`};
+  const pre=list.filter(r=>r.timing==='공복'||r.timing==='식전').pop(),post=list.filter(r=>r.timing.startsWith('식후')).pop();
+  const parts=[];
+  if(pre)parts.push(`${pre.timing} ${show(pre)}`);
+  if(post)parts.push(`마지막 식후 ${show(post)}`);
+  if(!parts.length)parts.push(`마지막 ${show(list[list.length-1])}`);
+  el.innerHTML=`오늘 ${parts.join(' · ')}`;
+}
+
+function valBox(v,t,name){
+  if(v===null)return `<div class="v none"><span class="vl">${name}</span><b>-</b></div>`;
+  const s=status(v,t);
+  if(!s)return `<div class="v"><span class="vl">${name}</span><b>${v}<small>mg/dL</small></b></div>`;
+  return `<div class="v"><span class="vl">${name}<i class="pill bg-${s[0]}">${s[1]}</i></span><b class="${s[0]}">${v}<small>mg/dL</small></b></div>`;
+}
+function render(){
+  renderSummary();renderChart();renderCal();
+  const box=$('list');
+  if(!recs.length){box.innerHTML='<div class="empty-list">기록하면 여기에 날짜별로 모여요</div>';return}
+  const days={};
+  recs.forEach(r=>{(days[r.ts.slice(0,10)]=days[r.ts.slice(0,10)]||[]).push(r)});
+  let h='';
+  Object.keys(days).sort().reverse().forEach(d=>{
+    const list=days[d];
+    h+=`<div class="day" id="d-${d}">${dayLabel(d)}<span>${list.length}건</span></div><div class="card list">`;
+    SLOTS.forEach(s=>{
+      const items=list.filter(r=>slotOf(Number(r.ts.slice(11,13)))===s).sort((a,b)=>a.ts.localeCompare(b.ts));
+      if(!items.length)return;
+      h+=`<div class="slot">${s}</div>`;
+      items.forEach(r=>{
+        const parts=[];
+        if(r.fp!==null&&r.cgm!==null){const df=r.cgm-r.fp;parts.push(`기기 차이 ${df>0?'+':''}${df} <em>(연속 − 채혈)</em>`)}
+        if(r.mt)parts.push(`식사 ${r.mt}`);
+        if(r.memo)parts.push(esc(r.memo));
+        h+=`<div class="rec"><div class="rh"><span class="time">${r.ts.slice(11,16)}</span>${r.timing?`<span class="tag">${r.timing}</span>`:'<span class="tag none">구분 없음</span>'}<span class="grow"></span>
+          <button class="lnk" data-e="${r.id}">수정</button><button class="lnk del" data-d="${r.id}">삭제</button></div>
+          <div class="vals">${valBox(r.fp,r.timing,'채혈')}${valBox(r.cgm,r.timing,'연속혈당기')}</div>
+          ${parts.length?`<div class="meta">${parts.join(' · ')}</div>`:''}</div>`;
+      });
+    });
+    h+='</div>';
+  });
+  box.innerHTML=h;
+}
+function esc(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+$('list').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.e){
+    const r=recs.find(x=>x.id===b.dataset.e);if(!r)return;
+    editId=r.id;slot=SLOTS.includes(r.slot)?r.slot:slotOf(Number(r.ts.slice(11,13)));timing=r.timing;slotManual=true;timingManual=true;
+    $('fp').value=r.fp??'';$('cgm').value=r.cgm??'';$('dt').value=r.ts;$('mt').value=r.mt;$('memo').value=r.memo;
+    $('more').open=true;$('save').textContent='수정 완료';$('cancel').hidden=false;$('err').textContent='';drawChips();
+    showTab('rec');$('formCard').scrollIntoView({block:'start'});
+  }else if(b.dataset.d){
+    if(!b.classList.contains('sure')){b.classList.add('sure');b.textContent='한 번 더 누르면 삭제';setTimeout(()=>{if(b.isConnected){b.classList.remove('sure');b.textContent='삭제'}},3000);return}
+    recs=recs.filter(x=>x.id!==b.dataset.d);persist();if(editId===b.dataset.d)resetForm();render();toast('삭제했어요');
+  }
+});
+
+/* 백업 */
+let dl=null;
+try{if(window.claude&&claude.use)claude.use("downloads").then(d=>{dl=d}).catch(()=>{})}catch(e){}
+$('exp').onclick=async()=>{
+  if(!recs.length){toast('저장할 기록이 없어요');return}
+  const name=`혈당기록-${ymd(new Date())}.json`,data=JSON.stringify(recs,null,1);
+  if(dl){try{await dl.save({filename:name,data});toast('백업 파일을 저장했어요')}catch(e){toast('저장하지 않았어요')}return}
+  if(window.self!==window.top){
+    try{await navigator.clipboard.writeText(data);toast('백업 내용을 복사했어요. 카톡 나에게 보내기에 붙여 넣어 두세요')}
+    catch(e){toast('이 화면에서는 백업을 저장할 수 없어요')}
+    return}
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+  a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast('백업 파일을 저장했어요');
+};
+$('imp').onclick=()=>$('impFile').click();
+function clean(r){
+  if(!r||typeof r!=='object')return null;
+  const n=v=>(typeof v==='number'&&v>=10&&v<=900)?v:null;
+  const fp=n(r.fp),cgm=n(r.cgm);
+  if(typeof r.ts!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(r.ts)||(fp===null&&cgm===null))return null;
+  return{id:/^\d+$/.test(String(r.id))?String(r.id):String(Date.now())+Math.floor(Math.random()*1e6),ts:r.ts,
+    slot:SLOTS.includes(r.slot)?r.slot:slotOf(Number(r.ts.slice(11,13))),timing:TIMINGS.includes(r.timing)?r.timing:'',
+    fp,cgm,mt:(typeof r.mt==='string'&&/^\d{2}:\d{2}$/.test(r.mt))?r.mt:'',memo:typeof r.memo==='string'?r.memo.slice(0,200):''};
+}
+$('impFile').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const arr=JSON.parse(rd.result);if(!Array.isArray(arr))throw 0;
+      const map=new Map(recs.map(r=>[r.id,r]));let added=0;
+      arr.map(clean).filter(Boolean).forEach(r=>{if(!map.has(r.id))added++;map.set(r.id,r)});
+      recs=[...map.values()];persist();render();toast(`${added}건을 불러왔어요`);
+    }catch(_){toast('백업 파일을 읽지 못했어요')}
+    e.target.value='';
+  };
+  rd.readAsText(f);
+};
+
+
+/* 입력할 때 바로 판정 */
+function preview(){
+  [['fp','fpPv'],['cgm','cgmPv']].forEach(([a,b])=>{
+    const raw=$(a).value,v=Number(raw),el=$(b);
+    if(!raw||v<10||v>900){el.innerHTML='';return}
+    const s=status(v,timing);
+    el.innerHTML=s?`<i class="pill bg-${s[0]}">${s[1]}</i>`:'<p class="hint">공복/식후를 골라 주세요</p>';
+  });
+}
+$('fp').addEventListener('input',preview);$('cgm').addEventListener('input',preview);
+
+/* 그래프 */
+let range=7;
+const toD=s=>{const [y,m,d]=s.slice(0,10).split('-').map(Number);return new Date(y,m-1,d,Number(s.slice(11,13)),Number(s.slice(14,16)))};
+function renderChart(){
+  const seg=$('range');seg.innerHTML='';
+  [7,14,30].forEach(n=>{const b=document.createElement('button');b.type='button';b.textContent=n+'일';if(n===range)b.className='on';
+    b.onclick=()=>{range=n;$('pick').innerHTML='';renderChart()};seg.appendChild(b)});
+  const t=new Date(),start=new Date(t.getFullYear(),t.getMonth(),t.getDate()-range+1),end=new Date(t.getFullYear(),t.getMonth(),t.getDate()+1);
+  const rs=recs.map(r=>({r,d:toD(r.ts)})).filter(p=>p.d>=start&&p.d<end).sort((a,b)=>a.d-b.d);
+  const el=$('chart');
+  if(!rs.length){el.innerHTML='<div class="empty-list" style="padding:30px 0">이 기간에는 기록이 없어요</div>';return}
+  const vs=rs.flatMap(p=>[p.r.fp,p.r.cgm]).filter(v=>v!==null);
+  const W=340,H=200,L=30,R=10,T=10,B=26,lo=Math.min(50,...vs)-5,hi=Math.max(220,...vs)+10;
+  const x=d=>L+(d-start)/(end-start)*(W-L-R),y=v=>T+(hi-v)/(hi-lo)*(H-T-B);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 ${range}일 채혈과 연속혈당기 그래프">`;
+  [100,150,200].forEach(v=>{s+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="3 3"/><text x="${L-5}" y="${y(v)+4}" text-anchor="end">${v}</text>`});
+  const step=range===7?1:range===14?2:5;
+  for(let i=range-1;i>=0;i-=step){const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i);
+    s+=`<text x="${x(new Date(d.getTime()+432e5))}" y="${H-8}" text-anchor="middle">${d.getMonth()+1}/${d.getDate()}</text>`}
+  const rr=range>14?3.2:4.2;
+  [['fp','var(--pri)'],['cgm','var(--post)']].forEach(([k,c])=>{const ps=rs.filter(p=>p.r[k]!==null);
+    if(ps.length>1)s+=`<polyline fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="${ps.map(p=>x(p.d).toFixed(1)+','+y(p.r[k]).toFixed(1)).join(' ')}"/>`;
+    ps.forEach(p=>{const post=p.r.timing.startsWith('식후'),none=!p.r.timing,cc=none?'var(--sub)':c;
+      s+=`<circle cx="${x(p.d)}" cy="${y(p.r[k])}" r="${rr}" fill="${post?'var(--card)':cc}" stroke="${cc}" stroke-width="${post?2:1.5}"/>`})});
+  rs.forEach((p,i)=>[p.r.fp,p.r.cgm].forEach(v=>{if(v!==null)s+=`<circle data-p="${i}" cx="${x(p.d)}" cy="${y(v)}" r="13" fill="transparent" style="cursor:pointer"/>`}));
+  el.innerHTML=s+'</svg>';
+  el.onclick=e=>{const c=e.target.closest('[data-p]');if(!c)return;const {r,d}=rs[c.dataset.p];
+    const one=(v,n)=>{if(v===null)return '';const st=status(v,r.timing);return `<div>${n} <b>${v}</b>${st?` <i class="pill bg-${st[0]}">${st[1]}</i>`:''}</div>`};
+    const df=(r.fp!==null&&r.cgm!==null)?`<div class="sub">두 기기 차이 ${r.cgm-r.fp>0?'+':''}${r.cgm-r.fp}</div>`:'';
+    $('pick').innerHTML=`<div>${d.getMonth()+1}월 ${d.getDate()}일 ${r.ts.slice(11,16)} · ${r.timing||'구분 없음'}</div>${one(r.fp,'채혈')}${one(r.cgm,'연속혈당기')}${df}`};
+}
+
+/* 달력 */
+let calM=null;
+function renderCal(){
+  const t=new Date();if(!calM)calM=new Date(t.getFullYear(),t.getMonth(),1);
+  const y=calM.getFullYear(),m=calM.getMonth(),rank={low:4,high:3,warn:2,ok:1,rec:0},worst={};
+  $('calTitle').textContent=`${y}년 ${m+1}월`;
+  recs.forEach(r=>{const d=r.ts.slice(0,10);[r.fp,r.cgm].forEach(v=>{if(v===null)return;const st=status(v,r.timing),k=st?st[0]:'rec';
+    if(!(d in worst)||rank[k]>rank[worst[d]])worst[d]=k})});
+  let h=DOW.map(d=>`<div class="dw">${d}</div>`).join('')+'<div></div>'.repeat(new Date(y,m,1).getDay());
+  for(let d=1,n=new Date(y,m+1,0).getDate();d<=n;d++){const key=`${y}-${pad(m+1)}-${pad(d)}`,w=worst[key];
+    h+=`<button type="button" data-day="${key}" class="${key===ymd(t)?'today':''}" ${w?'':'disabled'}>${d}<i class="${w?'d-'+w:''}"></i></button>`}
+  $('cal').innerHTML=h;
+  $('calNext').disabled=(y===t.getFullYear()&&m===t.getMonth());
+}
+$('calPrev').onclick=()=>{calM=new Date(calM.getFullYear(),calM.getMonth()-1,1);renderCal()};
+$('calNext').onclick=()=>{calM=new Date(calM.getFullYear(),calM.getMonth()+1,1);renderCal()};
+$('cal').onclick=e=>{const b=e.target.closest('[data-day]');if(!b||b.disabled)return;const el=$('d-'+b.dataset.day);showTab('list');if(el)el.scrollIntoView({block:'start'})};
+
+/* 탭 */
+function showTab(t){document.querySelectorAll('.pane').forEach(p=>p.hidden=p.id!=='p-'+t);
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));window.scrollTo(0,0)}
+$('tabs').onclick=e=>{const b=e.target.closest('button');if(b)showTab(b.dataset.t)};
+
+/* 글씨 크기 */
+const ZS=[[1,'보통'],[1.15,'크게'],[1.3,'아주 크게']];let zi=0;
+try{zi=Number(localStorage.getItem('glucoseZoom'))||0}catch(e){}
+function applyZoom(){zi%=3;document.querySelector('.wrap').style.zoom=ZS[zi][0];$('fz').textContent='글씨 '+ZS[zi][1];try{localStorage.setItem('glucoseZoom',zi)}catch(e){}}
+$('fz').onclick=()=>{zi++;applyZoom()};applyZoom();
+
+/* 사진: 사진 파일을 받으면 아래 목록에 들어갑니다 */
+const PHOTOS=["photos/01.jpg", "photos/02.jpg", "photos/03.jpg", "photos/04.jpg", "photos/05.jpg", "photos/06.jpg", "photos/07.jpg", "photos/08.jpg", "photos/09.jpg", "photos/10.jpg", "photos/11.jpg", "photos/12.jpg", "photos/13.jpg", "photos/14.jpg", "photos/15.jpg", "photos/16.jpg", "photos/17.jpg", "photos/18.jpg", "photos/19.jpg", "photos/20.jpg", "photos/21.jpg", "photos/22.jpg", "photos/23.jpg", "photos/24.jpg", "photos/25.jpg", "photos/26.jpg", "photos/27.jpg", "photos/28.jpg"];
+const todayIdx=()=>{const d=new Date();return Math.round(new Date(d.getFullYear(),d.getMonth(),d.getDate())/864e5)%Math.max(PHOTOS.length,1)};
+let lastPop=-1,next=null;
+function pickNext(){
+  if(!PHOTOS.length)return;
+  let i;do{i=Math.floor(Math.random()*PHOTOS.length)}while(PHOTOS.length>1&&i===lastPop);
+  const img=new Image();img.src=PHOTOS[i];next={i,img};
+}
+function openPop(src,msg){
+  $('popImg').src=src;$('popMsg').textContent=msg;$('pop').hidden=false;
+  if(location.hash!=='#photo'){try{location.hash='photo'}catch(e){}}
+  requestAnimationFrame(()=>requestAnimationFrame(()=>$('pop').classList.add('show')));
+}
+function popPhoto(msg){
+  const n=next;
+  if(!n||!n.img.complete||!n.img.naturalWidth){toast(msg);pickNext();return}
+  lastPop=n.i;openPop(n.img.src,msg);pickNext();
+}
+function hidePop(){if($('pop').hidden)return;$('pop').classList.remove('show');setTimeout(()=>{$('pop').hidden=true},250)}
+function closePop(){if(location.hash==='#photo')history.back();else hidePop()}
+window.addEventListener('hashchange',()=>{if(location.hash!=='#photo')hidePop()});
+$('popImg').onerror=()=>{hidePop();if(location.hash==='#photo')history.back()};
+$('popClose').onclick=closePop;
+$('pop').onclick=e=>{if(e.target===$('pop'))closePop()};
+if(location.hash==='#photo'){try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}}
+setTimeout(pickNext,1500);
+
+
+function setToday(){const n=new Date();$('today').textContent=`${n.getMonth()+1}월 ${n.getDate()}일 ${DOW[n.getDay()]}요일`}
+function refresh(){setToday();if(!editId&&!dtManual){$('dt').value=nowLocal();autoSlot();drawChips()}render()}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
+window.addEventListener('pageshow',refresh);
+setInterval(()=>{if(!document.hidden&&!editId&&!dtManual){$('dt').value=nowLocal();autoSlot();drawChips()}},60000);
+setToday();resetForm();render();
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+</script>
+</body>
+</html>
