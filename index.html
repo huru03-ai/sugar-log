@@ -178,9 +178,21 @@ input[type=number]{-moz-appearance:textfield}
 .hero figcaption{font-size:17px;color:var(--sub2);background:var(--card);padding:14px 18px;border-radius:18px}
 .hero.has figcaption{position:absolute;left:0;right:0;bottom:0;border-radius:0;background:linear-gradient(transparent,rgba(0,0,0,.62));color:#fff;padding:30px 16px 12px}
 .hero figcaption b{font-size:20px}
-#timings{display:grid;grid-template-columns:1fr 1fr}
-#timings button{height:48px}
+#timings{display:grid;grid-template-columns:1fr 1fr 1.3fr}
+#timings button{height:48px;white-space:nowrap;padding:0 6px}
 .pick div{margin-top:2px}.pick .sub{color:var(--sub2);font-size:17px}
+.medbtn{display:flex;align-items:center;width:100%;margin-top:12px;height:52px;border:0;border-radius:12px;background:var(--field);color:var(--sub2);font-size:18px;font-weight:600;padding:0 14px}
+.medbtn::before{content:'';width:24px;height:24px;border-radius:7px;box-shadow:inset 0 0 0 2px var(--sub);margin-right:12px;flex:none}
+.medbtn.on{color:var(--ink)}
+.medbtn.on::before{box-shadow:none;background:var(--ok) no-repeat center/16px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+#memo{margin-top:10px}
+.tag.med{background:var(--blue-bg,#EAF1FD);color:var(--low)}
+.chart text.sl{font-size:9.5px;fill:var(--sub2)}
+.rh{flex-wrap:wrap;row-gap:8px}
+.tag,.lnk{white-space:nowrap}
+.lnk{padding:0 14px}
+.vl{flex-wrap:wrap}
+.acts{display:flex;justify-content:flex-end;margin-top:10px}
 </style>
 </head>
 <body>
@@ -202,6 +214,8 @@ input[type=number]{-moz-appearance:textfield}
 
     <div class="lb">공복 / 식후</div>
     <div class="chips" id="timings"></div>
+    <button type="button" class="medbtn" id="med" aria-pressed="false">약 먹었어요</button>
+    <input id="memo" type="text" maxlength="100" placeholder="특이사항: 식사, 운동, 스트레스 등" aria-label="특이사항">
 
 
     <div class="err" id="err" role="alert"></div>
@@ -212,7 +226,7 @@ input[type=number]{-moz-appearance:textfield}
       <label class="lb" for="dt">측정 시간</label>
       <input id="dt" type="datetime-local">
 
-      <input id="mt" type="hidden"><input id="memo" type="hidden">
+      <input id="mt" type="hidden">
     </details>
   </section>
   </div>
@@ -255,7 +269,7 @@ input[type=number]{-moz-appearance:textfield}
 <script>
 const KEY='glucoseLog.v1';
 const SLOTS=['아침','점심','저녁'];
-const TIMINGS=['공복','식전','식후 1시간','식후 2시간'];
+const TIMINGS=['공복','식전','식후 2시간'];
 const $=id=>document.getElementById(id);
 let recs=[],editId=null,slotManual=false,timingManual=false,slot='아침',timing='';
 try{recs=JSON.parse(localStorage.getItem(KEY))||[]}catch(e){recs=[]}
@@ -274,13 +288,13 @@ function dayLabel(s){
 }
 
 // 공복/식후를 고르지 않았으면 판정하지 않음
+// 판정 기준: 혈당조절 목표 (공복·식전 80~130, 식후 180 미만), 70 미만은 저혈당
 function status(v,t){
   if(v<70)return['low','저혈당'];
   if(!t)return null;
-  const post=t.startsWith('식후');
-  const warnFrom=post?140:100, highFrom=post?200:126;
-  if(v>=highFrom)return['high','고혈당'];
-  if(v>=warnFrom)return['warn','주의'];
+  if(t.startsWith('식후'))return v>=180?['high','고혈당']:['ok','정상'];
+  if(v>130)return['high','고혈당'];
+  if(v<80)return['warn','주의'];
   return['ok','정상'];
 }
 
@@ -299,7 +313,7 @@ function drawChips(){
   if(v){when=(v.slice(0,10)===ymd(new Date())?'오늘 ':`${Number(v.slice(5,7))}/${Number(v.slice(8,10))} `)+v.slice(11,16);
     if(v===nowLocal())when='지금';}
   preview();
-  $('moreSum').textContent=[when,slot,$('memo').value.trim()?'메모 있음':''].filter(Boolean).join(' · ');
+  $('moreSum').textContent=[when,slot].filter(Boolean).join(' · ');
 }
 function autoSlot(){
   if(slotManual)return;
@@ -312,7 +326,7 @@ function autoTiming(){
   let m=(Number(dt.slice(11,13))*60+Number(dt.slice(14,16)))-(Number(mt.slice(0,2))*60+Number(mt.slice(3,5)));
   if(m<-720)m+=1440;   // 자정을 넘긴 경우 (예: 23:30 식사, 00:30 측정)
   else if(m>720)m-=1440;
-  timing=m<0?'식전':m<90?'식후 1시간':'식후 2시간';
+  timing=m<0?'식전':'식후 2시간';
 }
 let dtManual=false;
 $('dt').addEventListener('input',()=>{dtManual=true;autoSlot();autoTiming();drawChips()});
@@ -320,7 +334,7 @@ $('mt').addEventListener('input',()=>{autoTiming();drawChips()});
 $('memo').addEventListener('input',drawChips);
 
 function resetForm(){
-  editId=null;dtManual=false;slotManual=false;timingManual=false;timing='';
+  editId=null;dtManual=false;slotManual=false;timingManual=false;timing='';setMed(false);
   $('fp').value='';$('cgm').value='';$('mt').value='';$('memo').value='';$('err').textContent='';
   $('dt').value=nowLocal();autoSlot();drawChips();
   $('more').open=false;
@@ -338,7 +352,7 @@ $('save').onclick=()=>{
   if(toD($('dt').value)-new Date()>5*60000){$('more').open=true;$('err').textContent='측정 시간이 지금보다 늦어요. 시간을 확인해 주세요';return}
   saving=true;setTimeout(()=>{saving=false},1200);
   const wasEdit=!!editId;
-  const r={id:editId||String(Date.now()),ts:$('dt').value,slot:slotOf(Number($('dt').value.slice(11,13))),timing,fp:f,cgm:c,mt:$('mt').value,memo:$('memo').value.trim()};
+  const r={id:editId||String(Date.now()),ts:$('dt').value,slot:slotOf(Number($('dt').value.slice(11,13))),timing,fp:f,cgm:c,mt:$('mt').value,memo:$('memo').value.trim(),med};
   const prev=recs;
   recs=editId?recs.map(x=>x.id===editId?r:x):[...recs,r];
   if(!persist()){recs=prev;$('err').textContent='저장되지 않았어요. 앱을 닫았다가 다시 열어 주세요';render();return}
@@ -385,10 +399,10 @@ function render(){
         if(r.fp!==null&&r.cgm!==null){const df=r.cgm-r.fp;parts.push(`기기 차이 ${df>0?'+':''}${df} <em>(연속 − 채혈)</em>`)}
         if(r.mt)parts.push(`식사 ${r.mt}`);
         if(r.memo)parts.push(esc(r.memo));
-        h+=`<div class="rec"><div class="rh"><span class="time">${r.ts.slice(11,16)}</span>${r.timing?`<span class="tag">${r.timing}</span>`:'<span class="tag none">구분 없음</span>'}<span class="grow"></span>
-          <button class="lnk" data-e="${r.id}">수정</button><button class="lnk del" data-d="${r.id}">삭제</button></div>
+        h+=`<div class="rec"><div class="rh"><span class="time">${r.ts.slice(11,16)}</span>${r.timing?`<span class="tag">${r.timing}</span>`:'<span class="tag none">구분 없음</span>'}${r.med?'<span class="tag med">약 복용</span>':''}</div>
           <div class="vals">${valBox(r.fp,r.timing,'채혈')}${valBox(r.cgm,r.timing,'연속혈당기')}</div>
-          ${parts.length?`<div class="meta">${parts.join(' · ')}</div>`:''}</div>`;
+          ${parts.length?`<div class="meta">${parts.join(' · ')}</div>`:''}
+          <div class="acts"><button class="lnk" data-e="${r.id}">수정</button><button class="lnk del" data-d="${r.id}">삭제</button></div></div>`;
       });
     });
     h+='</div>';
@@ -401,7 +415,7 @@ $('list').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   if(b.dataset.e){
     const r=recs.find(x=>x.id===b.dataset.e);if(!r)return;
-    editId=r.id;slot=SLOTS.includes(r.slot)?r.slot:slotOf(Number(r.ts.slice(11,13)));timing=r.timing;slotManual=true;timingManual=true;
+    setMed(!!r.med);editId=r.id;slot=SLOTS.includes(r.slot)?r.slot:slotOf(Number(r.ts.slice(11,13)));timing=r.timing;slotManual=true;timingManual=true;
     $('fp').value=r.fp??'';$('cgm').value=r.cgm??'';$('dt').value=r.ts;$('mt').value=r.mt;$('memo').value=r.memo;
     $('more').open=true;$('save').textContent='수정 완료';$('cancel').hidden=false;$('err').textContent='';drawChips();
     showTab('rec');$('formCard').scrollIntoView({block:'start'});
@@ -435,8 +449,8 @@ function clean(r){
   const fp=n(r.fp),cgm=n(r.cgm);
   if(typeof r.ts!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(r.ts)||(fp===null&&cgm===null))return null;
   return{id:/^\d+$/.test(String(r.id))?String(r.id):String(Date.now())+Math.floor(Math.random()*1e6),ts:r.ts,
-    slot:SLOTS.includes(r.slot)?r.slot:slotOf(Number(r.ts.slice(11,13))),timing:TIMINGS.includes(r.timing)?r.timing:'',
-    fp,cgm,mt:(typeof r.mt==='string'&&/^\d{2}:\d{2}$/.test(r.mt))?r.mt:'',memo:typeof r.memo==='string'?r.memo.slice(0,200):''};
+    slot:SLOTS.includes(r.slot)?r.slot:slotOf(Number(r.ts.slice(11,13))),timing:(TIMINGS.includes(r.timing)||r.timing==='식후 1시간')?r.timing:'',
+    fp,cgm,mt:(typeof r.mt==='string'&&/^\d{2}:\d{2}$/.test(r.mt))?r.mt:'',memo:typeof r.memo==='string'?r.memo.slice(0,200):'',med:r.med===true};
 }
 $('impFile').onchange=e=>{
   const f=e.target.files[0];if(!f)return;
@@ -463,6 +477,9 @@ function preview(){
     el.innerHTML=s?`<i class="pill bg-${s[0]}">${s[1]}</i>`:'<p class="hint">공복/식후를 골라 주세요</p>';
   });
 }
+let med=false;
+function setMed(v){med=v;$('med').classList.toggle('on',v);$('med').setAttribute('aria-pressed',v)}
+$('med').onclick=()=>setMed(!med);
 $('fp').addEventListener('input',preview);$('cgm').addEventListener('input',preview);
 
 /* 그래프 */
@@ -477,24 +494,29 @@ function renderChart(){
   const el=$('chart');
   if(!rs.length){el.innerHTML='<div class="empty-list" style="padding:30px 0">이 기간에는 기록이 없어요</div>';return}
   const vs=rs.flatMap(p=>[p.r.fp,p.r.cgm]).filter(v=>v!==null);
-  const W=340,H=200,L=30,R=10,T=10,B=26,lo=Math.min(50,...vs)-5,hi=Math.max(220,...vs)+10;
-  const x=d=>L+(d-start)/(end-start)*(W-L-R),y=v=>T+(hi-v)/(hi-lo)*(H-T-B);
+  const W=340,H=212,L=30,R=10,T=10,B=range===7?40:26,lo=Math.min(50,...vs)-5,hi=Math.max(220,...vs)+10;
+  const X=t=>L+t/range*(W-L-R),x=d=>X((d-start)/864e5);
+  const SL=[[5,10],[10,16],[16,29]];
+  const px=d=>{const day=Math.floor((d-start)/864e5);let h=d.getHours()+d.getMinutes()/60;const k=SLOTS.indexOf(slotOf(d.getHours()));
+    if(k===2&&h<5)h+=24;const [a,b]=SL[k],f=Math.min(Math.max((h-a)/(b-a),0),1);return X(day+(k+0.25+f*0.5)/3)},y=v=>T+(hi-v)/(hi-lo)*(H-T-B);
   let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 ${range}일 채혈과 연속혈당기 그래프">`;
   [100,150,200].forEach(v=>{s+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="3 3"/><text x="${L-5}" y="${y(v)+4}" text-anchor="end">${v}</text>`});
   const step=range===7?1:range===14?2:5;
   for(let i=range-1;i>=0;i-=step){const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i);
-    s+=`<text x="${x(new Date(d.getTime()+432e5))}" y="${H-8}" text-anchor="middle">${d.getMonth()+1}/${d.getDate()}</text>`}
+    s+=`<text x="${x(new Date(d.getTime()+432e5))}" y="${H-6}" text-anchor="middle">${d.getMonth()+1}/${d.getDate()}</text>`;
+    if(range===7){s+=`<line x1="${x(d)}" x2="${x(d)}" y1="${T}" y2="${H-B+16}" stroke="var(--line)"/>`;
+      ['아','점','저'].forEach((n,k)=>{s+=`<text class="sl" x="${X(i+(k+0.5)/3)}" y="${H-B+12}" text-anchor="middle">${n}</text>`})}}
   const rr=range>14?3.2:4.2;
   [['fp','var(--pri)'],['cgm','var(--post)']].forEach(([k,c])=>{const ps=rs.filter(p=>p.r[k]!==null);
-    if(ps.length>1)s+=`<polyline fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="${ps.map(p=>x(p.d).toFixed(1)+','+y(p.r[k]).toFixed(1)).join(' ')}"/>`;
+    if(ps.length>1)s+=`<polyline fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="${ps.map(p=>px(p.d).toFixed(1)+','+y(p.r[k]).toFixed(1)).join(' ')}"/>`;
     ps.forEach(p=>{const post=p.r.timing.startsWith('식후'),none=!p.r.timing,cc=none?'var(--sub)':c;
-      s+=`<circle cx="${x(p.d)}" cy="${y(p.r[k])}" r="${rr}" fill="${post?'var(--card)':cc}" stroke="${cc}" stroke-width="${post?2:1.5}"/>`})});
-  rs.forEach((p,i)=>[p.r.fp,p.r.cgm].forEach(v=>{if(v!==null)s+=`<circle data-p="${i}" cx="${x(p.d)}" cy="${y(v)}" r="13" fill="transparent" style="cursor:pointer"/>`}));
+      s+=`<circle cx="${px(p.d)}" cy="${y(p.r[k])}" r="${rr}" fill="${post?'var(--card)':cc}" stroke="${cc}" stroke-width="${post?2:1.5}"/>`})});
+  rs.forEach((p,i)=>[p.r.fp,p.r.cgm].forEach(v=>{if(v!==null)s+=`<circle data-p="${i}" cx="${px(p.d)}" cy="${y(v)}" r="13" fill="transparent" style="cursor:pointer"/>`}));
   el.innerHTML=s+'</svg>';
   el.onclick=e=>{const c=e.target.closest('[data-p]');if(!c)return;const {r,d}=rs[c.dataset.p];
     const one=(v,n)=>{if(v===null)return '';const st=status(v,r.timing);return `<div>${n} <b>${v}</b>${st?` <i class="pill bg-${st[0]}">${st[1]}</i>`:''}</div>`};
     const df=(r.fp!==null&&r.cgm!==null)?`<div class="sub">두 기기 차이 ${r.cgm-r.fp>0?'+':''}${r.cgm-r.fp}</div>`:'';
-    $('pick').innerHTML=`<div>${d.getMonth()+1}월 ${d.getDate()}일 ${r.ts.slice(11,16)} · ${r.timing||'구분 없음'}</div>${one(r.fp,'채혈')}${one(r.cgm,'연속혈당기')}${df}`};
+    $('pick').innerHTML=`<div>${d.getMonth()+1}월 ${d.getDate()}일 ${r.ts.slice(11,16)} · ${r.timing||'구분 없음'}</div>${one(r.fp,'채혈')}${one(r.cgm,'연속혈당기')}${df}${r.med?'<div class="sub">약 복용</div>':''}${r.memo?`<div class="sub">${esc(r.memo)}</div>`:''}`};
 }
 
 /* 달력 */
@@ -552,7 +574,7 @@ $('popImg').onerror=()=>{hidePop();if(location.hash==='#photo')history.back()};
 $('popClose').onclick=closePop;
 $('pop').onclick=e=>{if(e.target===$('pop'))closePop()};
 if(location.hash==='#photo'){try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}}
-setTimeout(pickNext,1500);
+setTimeout(pickNext,300);
 
 
 function setToday(){const n=new Date();$('today').textContent=`${n.getMonth()+1}월 ${n.getDate()}일 ${DOW[n.getDay()]}요일`}
